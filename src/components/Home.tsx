@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 
-
 type EquipmentItem = {
     Type: string;
     Count: number;
@@ -101,6 +100,7 @@ export default function Home() {
     const [allowBag, setAllowBag] = useState(false);
     const [healerSupportIP, setHealerSupportIP] = useState(1400);
     const [dpsTankIP, setDpsTankIP] = useState(1450);
+    const [exceptions, setExceptions] = useState<{ [key: number]: boolean }>({});
 
     const handleCreateList = async () => {
         setLoading(true);
@@ -115,7 +115,7 @@ export default function Home() {
         }));
 
         setEventData(data);
-        setLoading(false);  // Finaliza o carregamento
+        setLoading(false);
     };
 
     const getStandardizedItemType = (type: string) => {
@@ -142,8 +142,6 @@ export default function Home() {
         });
         return equipmentCounts;
     };
-
-    const equipmentCounts = getEquipmentCounts(eventData);
 
     const getItemImageUrl = (itemType: string) => {
         return `https://render.albiononline.com/v1/item/${itemType}.png`;
@@ -181,6 +179,10 @@ export default function Home() {
     };
 
     const getCheckOrX = (event: Event) => {
+        if (exceptions[event.EventId]) {
+            return { check: "✔️", reason: "" };
+        }
+
         const victimIP = event.Victim.AverageItemPower;
         const mainHand = event.Victim.Equipment.MainHand;
         const mount = event.Victim.Equipment.Mount?.Type;
@@ -205,6 +207,15 @@ export default function Home() {
 
         return { check: "✔️", reason: "" };
     };
+
+    const handleExceptionChange = (eventId: number, isChecked: boolean) => {
+        setExceptions((prevExceptions) => ({
+            ...prevExceptions,
+            [eventId]: isChecked,
+        }));
+    };
+
+    const equipmentCounts = getEquipmentCounts(eventData.filter(event => getCheckOrX(event).check === "✔️" || exceptions[event.EventId]));
 
     return (
         <main className="flex min-h-screen flex-col items-center justify-between p-10 bg-gray-900 text-white">
@@ -248,7 +259,7 @@ export default function Home() {
                 </div>
 
                 <textarea
-                    className="p-2 border rounded-md bg-gray-700 mb-4"
+                    className="p-2 border rounded-md bg-gray-700 mb-4 w-full"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     rows={10}
@@ -257,12 +268,11 @@ export default function Home() {
                 <button
                     className="p-2 bg-blue-500 text-white rounded-md"
                     onClick={handleCreateList}
-                    disabled={loading}  // Desativa o botão durante o carregamento
+                    disabled={loading}
                 >
                     {loading ? "Carregando..." : "Criar lista"}
                 </button>
             </div>
-
 
             <div className="mt-8 w-full max-w-5xl">
                 <h2 className="text-2xl mb-4">Dados dos Eventos:</h2>
@@ -273,6 +283,7 @@ export default function Home() {
                         <table className="table-auto w-full text-left mb-8">
                             <thead>
                                 <tr>
+                                    <th className="px-4 py-2 border-b border-gray-800">Exceção</th>
                                     <th className="px-4 py-2 border-b border-gray-800">Nome do Jogador</th>
                                     <th className="px-4 py-2 border-b border-gray-800">Guilda</th>
                                     <th className="px-4 py-2 border-b border-gray-800">IP</th>
@@ -292,6 +303,13 @@ export default function Home() {
                                         const checkOrX = getCheckOrX(event);
                                         return (
                                             <tr key={index} className="bg-gray-800">
+                                                <td className="border px-4 py-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={exceptions[event.EventId] || false}
+                                                        onChange={(e) => handleExceptionChange(event.EventId, e.target.checked)}
+                                                    />
+                                                </td>
                                                 <td className="border px-4 py-2">{event.Victim.Name}</td>
                                                 <td className="border px-4 py-2">{event.Victim.GuildName}</td>
                                                 <td className="border px-4 py-2">{event.Victim.AverageItemPower}</td>
