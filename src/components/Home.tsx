@@ -183,14 +183,14 @@ export default function Home() {
     const getCheckOrX = (event: Event) => {
         const victimIP = event.Victim.AverageItemPower;
         const mainHand = event.Victim.Equipment.MainHand;
-        const mount = event.Victim.Equipment?.Mount?.Type;
+        const mount = event.Victim.Equipment.Mount?.Type;
         const bag = event.Victim.Equipment.Bag?.Type;
 
         if (!allowBag && !isTank(mainHand.Type) && bag) {
             return { check: "❌", reason: "Bag" };
         }
 
-        if (isWithHeavyMount(mount)) {
+        if (isWithHeavyMount(mount || "")) {
             return { check: "❌", reason: "Mount Peso" };
         }
 
@@ -251,8 +251,8 @@ export default function Home() {
                     className="p-2 border rounded-md bg-gray-700 mb-4"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
-                    rows="10"
-                    cols="50"
+                    rows={10}
+                    cols={10}
                 />
                 <button
                     className="p-2 bg-blue-500 text-white rounded-md"
