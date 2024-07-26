@@ -1,96 +1,7 @@
 "use client";
+import { Event } from "@/interface/common";
+import { getEquipmentCounts, getItemImageUrl, isHealerOrSupport, isTank, isWithHeavyMount } from "@/utils/helpers";
 import { useState } from "react";
-
-type EquipmentItem = {
-    Type: string;
-    Count: number;
-    Quality: number;
-    ActiveSpells: any[];
-    PassiveSpells: any[];
-    LegendarySoul: any | null;
-};
-
-type Equipment = {
-    MainHand: EquipmentItem;
-    OffHand: EquipmentItem | null;
-    Head: EquipmentItem | null;
-    Armor: EquipmentItem | null;
-    Shoes: EquipmentItem | null;
-    Bag: EquipmentItem | null;
-    Cape: EquipmentItem | null;
-    Mount: EquipmentItem | null;
-    Potion: EquipmentItem | null;
-    Food: EquipmentItem | null;
-};
-
-type PvEStats = {
-    Total: number;
-    Royal: number;
-    Outlands: number;
-    Avalon: number;
-    Hellgate: number;
-    CorruptedDungeon: number;
-    Mists: number;
-};
-
-type GatheringStats = {
-    Fiber: PvEStats;
-    Hide: PvEStats;
-    Ore: PvEStats;
-    Rock: PvEStats;
-    Wood: PvEStats;
-    All: PvEStats;
-};
-
-type LifetimeStatistics = {
-    PvE: PvEStats;
-    Gathering: GatheringStats;
-    Crafting: PvEStats;
-    CrystalLeague: number;
-    FishingFame: number;
-    FarmingFame: number;
-    Timestamp: string | null;
-};
-
-type Player = {
-    AverageItemPower: number;
-    Equipment: Equipment;
-    Inventory: (EquipmentItem | null)[];
-    Name: string;
-    Id: string;
-    GuildName: string;
-    GuildId: string;
-    AllianceName: string;
-    AllianceId: string;
-    AllianceTag: string;
-    Avatar: string;
-    AvatarRing: string;
-    DeathFame: number;
-    KillFame: number;
-    FameRatio: number;
-    LifetimeStatistics: LifetimeStatistics;
-    DamageDone: number;
-    SupportHealingDone: number;
-};
-
-type Event = {
-    groupMemberCount: number;
-    numberOfParticipants: number;
-    EventId: number;
-    TimeStamp: string;
-    Version: number;
-    Killer: Player;
-    Victim: Player;
-    TotalVictimKillFame: number;
-    Location: string | null;
-    Participants: Player[];
-    GroupMembers: Player[];
-    GvGMatch: string | null;
-    BattleId: number;
-    KillArea: string;
-    Category: string | null;
-    Type: string;
-};
 
 export default function Home() {
     const [LinkList, setLinkList] = useState<string[]>([]);
@@ -101,83 +12,150 @@ export default function Home() {
     const [healerSupportIP, setHealerSupportIP] = useState(1400);
     const [dpsTankIP, setDpsTankIP] = useState(1450);
     const [exceptions, setExceptions] = useState<{ [key: number]: boolean }>({});
+    const [error, setError] = useState<string | null>(null);
+    const [itemPrices, setItemPrices] = useState<{ [key: string]: { avg: string; min: string; max: string } }>({});
+
+    const fetchEventData = async (id: string, attempts: number = 3): Promise<Event | null> => {
+        try {
+            const response = await fetch(`/api/getEventData?id=${id}`);
+            if (!response.ok) {
+                throw new Error("Failed to fetch data");
+            }
+            return response.json();
+        } catch (error) {
+            if (attempts > 1) {
+                return fetchEventData(id, attempts - 1);
+            } else {
+                return null;
+            }
+        }
+    };
+
+    const generateItemVariations = (itemName: string): string[] => {
+        // Remove o tier e o encantamento do itemName
+        const baseName = itemName.replace(/^T\d+_/, '').replace(/@\d+$/, '');
+        const variations = [
+            `T8_${baseName}`,
+            `T7_${baseName}@1`,
+            `T6_${baseName}@2`,
+            `T5_${baseName}@3`
+        ];
+        return variations;
+    };
+
+    const fetchItemPrices = async (items: string[]): Promise<{ [key: string]: { avg: string; min: string; max: string } }> => {
+        const itemVariations = items.flatMap(generateItemVariations);
+        const baseUrl = 'https://west.albion-online-data.com/api/v2/stats/history/';
+        const timeScale = '?time-scale=24';
+        const maxUrlLength = 2000; // Ajuste este valor conforme necessário
+        let prices: { [key: string]: { avg: string; min: string; max: string } } = {};
+
+        const fetchPricesForSubset = async (subset: string[]) => {
+            const url = `${baseUrl}${subset.join(',')}${timeScale}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error("Failed to fetch item prices");
+                }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error("Failed to fetch item prices:", error);
+                return [];
+            }
+        };
+
+        let currentSubset: string[] = [];
+        let currentUrlLength = baseUrl.length + timeScale.length;
+
+        for (const variation of itemVariations) {
+            const potentialUrlLength = currentUrlLength + variation.length + 1; // +1 for comma
+
+            if (potentialUrlLength > maxUrlLength) {
+                // Fetch prices for the current subset
+                const data = await fetchPricesForSubset(currentSubset);
+                prices = { ...prices, ...processPricesData(data, items) };
+
+                // Reset for the next subset
+                currentSubset = [variation];
+                currentUrlLength = baseUrl.length + timeScale.length + variation.length + 1;
+            } else {
+                currentSubset.push(variation);
+                currentUrlLength = potentialUrlLength;
+            }
+        }
+
+        // Fetch prices for the last subset
+        if (currentSubset.length > 0) {
+            const data = await fetchPricesForSubset(currentSubset);
+            prices = { ...prices, ...processPricesData(data, items) };
+        }
+
+        return prices;
+    };
+
+    const processPricesData = (data: any, items: string[]): { [key: string]: { avg: string; min: string; max: string } } => {
+        const formatPrice = (price: number): string => {
+            if (price >= 1_000_000) {
+                return (price / 1_000_000).toFixed(1) + 'm';
+            } else if (price >= 1_000) {
+                return (price / 1_000).toFixed(1) + 'k';
+            } else {
+                return price.toFixed(0);
+            }
+        };
+
+        const prices: { [key: string]: { avg: string; min: string; max: string } } = {};
+        items.forEach(item => {
+            const baseName = item.replace(/^T\d+_/, '').replace(/@\d+$/, '');
+            const itemData = data.filter((d: any) => d.item_id.includes(baseName));
+            const validPrices = itemData.flatMap((cur: any) => cur.data.map((entry: any) => entry.avg_price).filter((price: number) => price > 0));
+
+            if (validPrices.length > 0) {
+                const total = validPrices.reduce((sum: number, price: number) => sum + price, 0);
+                const avgPrice = total / validPrices.length;
+
+                // Filtrar preços discrepantes
+                const filteredPrices = validPrices.filter((price: any) => price >= avgPrice * 0.65 && price <= avgPrice * 1.35);
+
+                if (filteredPrices.length > 0) {
+                    const totalFiltered = filteredPrices.reduce((sum: number, price: number) => sum + price, 0);
+                    const avgFilteredPrice = totalFiltered / filteredPrices.length;
+                    const minPrice = Math.min(...filteredPrices);
+                    const maxPrice = Math.max(...filteredPrices);
+                    prices[item] = { avg: formatPrice(avgFilteredPrice), min: formatPrice(minPrice), max: formatPrice(maxPrice) };
+                } else {
+                    prices[item] = { avg: '0', min: '0', max: '0' };
+                }
+            } else {
+                prices[item] = { avg: '0', min: '0', max: '0' };
+            }
+        });
+        return prices;
+    };
 
     const handleCreateList = async () => {
         setLoading(true);
+        setError(null);
         const urlRegex = /(https?:\/\/albiononline\.com\/(?:en\/)?killboard\/kill\/(\d+)(?:\?server=\w+)?)/g;
         const links = [...text.matchAll(urlRegex)].map((match) => match[2]);
         setLinkList(links);
 
-        // Fazer uma requisição à API para cada ID através do servidor Next.js
         const data = await Promise.all(links.map(async (id) => {
-            const response = await fetch(`/api/getEventData?id=${id}`);
-            return response.json();
+            const result = await fetchEventData(id);
+            if (result === null) {
+                setError("Não foi possível carregar os dados de alguns eventos. Por favor, tente novamente mais tarde.");
+            }
+            return result;
         }));
 
-        setEventData(data);
+        setEventData(data.filter((event) => event !== null) as Event[]);
+
+        const equipmentItems = Object.keys(getEquipmentCounts(data.filter((event) => event !== null) as Event[]));
+        const prices = await fetchItemPrices(equipmentItems);
+        setItemPrices(prices);
+
         setLoading(false);
-    };
-
-
-
-    const getStandardizedItemType = (type: string) => {
-        const regex = /^[T\d]+_/;
-        return type.replace(regex, 'T8_').replace(/@\d+$/, '');
-    };
-
-    const getEquipmentCounts = (events: Event[]) => {
-        const equipmentCounts: { [key: string]: { name: string; count: number } } = {};
-        const relevantKeys = ["MainHand", "OffHand", "Head", "Armor", "Shoes"];
-
-        events.forEach((event) => {
-            relevantKeys.forEach((key) => {
-                const item = event.Victim.Equipment[key as keyof typeof event.Victim.Equipment];
-                if (item) {
-                    const standardizedType = getStandardizedItemType(item.Type);
-                    if (equipmentCounts[standardizedType]) {
-                        equipmentCounts[standardizedType].count += 1;
-                    } else {
-                        equipmentCounts[standardizedType] = { name: standardizedType, count: 1 };
-                    }
-                }
-            });
-        });
-        return equipmentCounts;
-    };
-
-    const getItemImageUrl = (itemType: string) => {
-        return `https://render.albiononline.com/v1/item/${itemType}.png`;
-    };
-
-    const tankItems = ["MAIN_MACE", "2H_DUALMACE_AVALON", "MAIN_MACE_HELL", "2H_ICEGAUNTLETS_HELL", "2H_IRONGAUNTLETS_HELL", "2H_HAMMER_AVALON", "MAIN_MACE_CRYSTAL", "2H_MACE_MORGANA", "2H_HAMMER_UNDEAD", "MAIN_ROCKMACE_KEEPER", "2H_DUALHAMMER_HELL", "2H_POLEHAMMER", "2H_HAMMER", "2H_MACE", "MAIN_HAMMER"];
-    const healerSupportItems = ["2H_HOLYSTAFF", "2H_HOLYSTAFF_UNDEAD", "MAIN_HOLYSTAFF_AVALON", "MAIN_HOLYSTAFF", "2H_DIVINESTAFF", "MAIN_HOLYSTAFF_MORGANA", "2H_HOLYSTAFF_CRYSTAL", "2H_HOLYSTAFF_HELL", "2H_ARCANESTAFF_HELL", "MAIN_ARCANESTAFF_UNDEAD", "2H_ARCANESTAFF_CRYSTAL", "2H_ENIGMATICSTAFF", "2H_ARCANESTAFF", "MAIN_ARCANESTAFF", "2H_ARCANE_RINGPAIR_AVALON"];
-    const transportMounts = [
-        "T2_MOUNT_MULE",
-        "T3_MOUNT_OX",
-        "T4_MOUNT_OX",
-        "T5_MOUNT_OX",
-        "T6_MOUNT_OX",
-        "T7_MOUNT_OX",
-        "T8_MOUNT_OX",
-        "T4_MOUNT_GIANTSTAG",
-        "T6_MOUNT_GIANTSTAG_MOOSE",
-        "T8_MOUNT_MAMMOTH_TRANSPORT",
-        "T5_MOUNT_DIREBEAR_FW_FORTSTERLING",
-        "T5_MOUNT_DIREBOAR_FW_LYMHURST",
-        "T8_MOUNT_DIREBEAR_FW_FORTSTERLING_ELITE",
-        "T8_MOUNT_DIREBOAR_FW_LYMHURST_ELITE"
-    ];
-
-    const isWithHeavyMount = (mount: string) => {
-        return transportMounts.some(item => mount.includes(item));
-    };
-
-    const isHealerOrSupport = (itemType: string) => {
-        return healerSupportItems.some(item => itemType.includes(item));
-    };
-
-    const isTank = (itemType: string) => {
-        return tankItems.some(item => itemType.includes(item));
     };
 
     const getCheckOrX = (event: Event) => {
@@ -217,7 +195,30 @@ export default function Home() {
         }));
     };
 
+    const calculateTotalSetPrice = (event: Event): string => {
+        const equipment = event.Victim.Equipment;
+        const items = Object.values(equipment).filter(item => item !== null).map(item => item.Type);
+
+        const totalPrice = items.reduce((sum, item) => {
+            const baseName = `T8_${item.replace(/^T\d+_/, '').replace(/@\d+$/, '')}`;
+            console.log(item, baseName, itemPrices)
+            const price = itemPrices[baseName] ? parseFloat(itemPrices[baseName].avg.replace(/[km]/, '')) * (itemPrices[baseName].avg.includes('m') ? 1_000_000 : itemPrices[baseName].avg.includes('k') ? 1_000 : 1) : 0;
+            return sum + price;
+        }, 0);
+
+        return totalPrice >= 1_000_000 ? (totalPrice / 1_000_000).toFixed(1) + 'm' : totalPrice >= 1_000 ? (totalPrice / 1_000).toFixed(1) + 'k' : totalPrice.toFixed(0);
+    };
+
     const equipmentCounts = getEquipmentCounts(eventData.filter(event => getCheckOrX(event).check === "✔️" || exceptions[event.EventId]));
+
+    const calculateTotalTableCost = (): string => {
+        const totalCost = Object.entries(equipmentCounts).reduce((sum, [itemName, itemData]) => {
+            const price = itemPrices[itemName] ? parseFloat(itemPrices[itemName].avg.replace(/[km]/, '')) * (itemPrices[itemName].avg.includes('m') ? 1_000_000 : itemPrices[itemName].avg.includes('k') ? 1_000 : 1) : 0;
+            return sum + (price * itemData.count);
+        }, 0);
+
+        return totalCost >= 1_000_000 ? (totalCost / 1_000_000).toFixed(1) + 'm' : totalCost >= 1_000 ? (totalCost / 1_000).toFixed(1) + 'k' : totalCost.toFixed(0);
+    };
 
     return (
         <main className="flex min-h-screen flex-col items-center justify-between p-10 bg-gray-900 text-white">
@@ -276,6 +277,8 @@ export default function Home() {
                 </button>
             </div>
 
+            {error && <div className="text-red-500 mt-4">{error}</div>}
+
             <div className="mt-8 w-full max-w-5xl">
                 <h2 className="text-2xl mb-4">Dados dos Eventos:</h2>
                 {loading ? (
@@ -292,6 +295,7 @@ export default function Home() {
                                     <th className="px-4 py-2 border-b border-gray-800">Data do Evento</th>
                                     <th className="px-4 py-2 border-b border-gray-800">Check</th>
                                     <th className="px-4 py-2 border-b border-gray-800">Motivo</th>
+                                    <th className="px-4 py-2 border-b border-gray-800">Preço Total do Set</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -318,6 +322,7 @@ export default function Home() {
                                                 <td className="border px-4 py-2">{new Date(event.TimeStamp).toLocaleString()}</td>
                                                 <td className="border px-4 py-2">{checkOrX.check}</td>
                                                 <td className="border px-4 py-2">{checkOrX.reason}</td>
+                                                <td className="border px-4 py-2">{calculateTotalSetPrice(event)}</td>
                                             </tr>
                                         );
                                     })}
@@ -331,6 +336,7 @@ export default function Home() {
                                     <th className="px-4 py-2 border-b border-gray-800">Foto do Item</th>
                                     <th className="px-4 py-2 border-b border-gray-800">Nome do Item</th>
                                     <th className="px-4 py-2 border-b border-gray-800">Quantidade</th>
+                                    <th className="px-4 py-2 border-b border-gray-800">Preço Médio</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -341,8 +347,21 @@ export default function Home() {
                                         </td>
                                         <td className="border px-4 py-2">{item.name}</td>
                                         <td className="border px-4 py-2">{item.count}</td>
+                                        <td className="border px-4 py-2">
+                                            {itemPrices[item.name] ? (
+                                                <>
+                                                    <div>Avg: {itemPrices[item.name].avg}</div>
+                                                    <div className="opacity-35">Min: {itemPrices[item.name].min}</div>
+                                                    <div className="opacity-35">Max: {itemPrices[item.name].max}</div>
+                                                </>
+                                            ) : 'N/A'}
+                                        </td>
                                     </tr>
                                 ))}
+                                <tr className="bg-gray-800 font-bold">
+                                    <td className="border px-4 py-2" colSpan={3}>Custo Médio Total</td>
+                                    <td className="border px-4 py-2">{calculateTotalTableCost()}</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
