@@ -1,9 +1,6 @@
 "use client";
 import { useState } from "react";
 
-interface EquipmentItem {
-    Type: string;
-}
 
 type EquipmentItem = {
     Type: string;
@@ -186,7 +183,7 @@ export default function Home() {
     const getCheckOrX = (event: Event) => {
         const victimIP = event.Victim.AverageItemPower;
         const mainHand = event.Victim.Equipment.MainHand;
-        const mount = event.Victim.Equipment.Mount.Type;
+        const mount = event.Victim.Equipment?.Mount?.Type;
         const bag = event.Victim.Equipment.Bag?.Type;
 
         if (!allowBag && !isTank(mainHand.Type) && bag) {
