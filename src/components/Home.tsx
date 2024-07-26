@@ -104,7 +104,7 @@ export default function Home() {
 
     const handleCreateList = async () => {
         setLoading(true);
-        const urlRegex = /(https?:\/\/albiononline\.com\/en\/killboard\/kill\/(\d+))/g;
+        const urlRegex = /(https?:\/\/albiononline\.com\/(?:en\/)?killboard\/kill\/(\d+)(?:\?server=\w+)?)/g;
         const links = [...text.matchAll(urlRegex)].map((match) => match[2]);
         setLinkList(links);
 
@@ -117,6 +117,8 @@ export default function Home() {
         setEventData(data);
         setLoading(false);
     };
+
+
 
     const getStandardizedItemType = (type: string) => {
         const regex = /^[T\d]+_/;
