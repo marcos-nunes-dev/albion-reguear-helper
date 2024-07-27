@@ -2,6 +2,7 @@
 import { Event } from "@/interface/common";
 import { getEquipmentCounts, getItemImageUrl, isHealerOrSupport, isTank, isWithHeavyMount } from "@/utils/helpers";
 import { useState } from "react";
+import { saveAs } from 'file-saver';
 
 export default function Home() {
     const [LinkList, setLinkList] = useState<string[]>([]);
@@ -226,6 +227,34 @@ export default function Home() {
         return totalCost >= 1_000_000 ? (totalCost / 1_000_000).toFixed(1) + 'm' : totalCost >= 1_000 ? (totalCost / 1_000).toFixed(1) + 'k' : totalCost.toFixed(0);
     };
 
+    const exportToCSV = () => {
+        const csvRows = [
+            ['Foto do Item', 'Nome do Item', 'Quantidade', 'Preço Médio/u']
+        ];
+
+        Object.values(equipmentCounts).forEach((item) => {
+            const row = [
+                getItemImageUrl(item.name),
+                item.name,
+                item.count,
+                itemPrices[item.name] ? itemPrices[item.name]!.avg : manualPrices[item.name] || 'N/A'
+            ];
+            csvRows.push(row as any);
+        });
+
+        const totalCostRow = [
+            '',
+            'Custo Médio Total',
+            '',
+            calculateTotalTableCost()
+        ];
+        csvRows.push(totalCostRow);
+
+        const csvContent = csvRows.map(row => row.join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        saveAs(blob, 'equipment_data.csv');
+    };
+
     return (
         <main className="flex min-h-screen flex-col items-center justify-between p-10 bg-gray-900 text-white">
             <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
@@ -312,7 +341,6 @@ export default function Home() {
                                         return checkOrXa.check === "❌" ? -1 : checkOrXb.check === "❌" ? 1 : 0;
                                     })
                                     .map((event, index) => {
-                                        console.log(event.Victim.Equipment)
                                         const checkOrX = getCheckOrX(event);
                                         return (
                                             <tr key={index} className="bg-gray-800">
@@ -359,6 +387,12 @@ export default function Home() {
                         </table>
 
                         <h2 className="text-2xl mb-4">Somatório de Itens:</h2>
+                        <button
+                            className="p-2 bg-green-500 text-white rounded-md mb-4"
+                            onClick={exportToCSV}
+                        >
+                            Exportar para CSV
+                        </button>
                         <table className="table-auto w-full text-left mt-4">
                             <thead>
                                 <tr>
