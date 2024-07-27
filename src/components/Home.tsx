@@ -13,7 +13,9 @@ export default function Home() {
     const [dpsTankIP, setDpsTankIP] = useState(1450);
     const [exceptions, setExceptions] = useState<{ [key: number]: boolean }>({});
     const [error, setError] = useState<string | null>(null);
-    const [itemPrices, setItemPrices] = useState<{ [key: string]: { avg: string; min: string; max: string } }>({});
+    const [itemPrices, setItemPrices] = useState<{ [key: string]: { avg: string; min: string; max: string } | null }>({});
+    const [manualPrices, setManualPrices] = useState<{ [key: string]: string }>({});
+    const [hoveredPlayer, setHoveredPlayer] = useState<number | null>(null);
 
     const fetchEventData = async (id: string, attempts: number = 3): Promise<Event | null> => {
         try {
@@ -32,7 +34,6 @@ export default function Home() {
     };
 
     const generateItemVariations = (itemName: string): string[] => {
-        // Remove o tier e o encantamento do itemName
         const baseName = itemName.replace(/^T\d+_/, '').replace(/@\d+$/, '');
         const variations = [
             `T8_${baseName}`,
@@ -42,14 +43,13 @@ export default function Home() {
         ];
         return variations;
     };
-    
 
-    const fetchItemPrices = async (items: string[]): Promise<{ [key: string]: { avg: string; min: string; max: string } }> => {
+    const fetchItemPrices = async (items: string[]): Promise<{ [key: string]: { avg: string; min: string; max: string } | null }> => {
         const itemVariations = items.flatMap(generateItemVariations);
         const baseUrl = 'https://west.albion-online-data.com/api/v2/stats/history/';
         const timeScale = '?time-scale=24';
-        const maxUrlLength = 2000; // Ajuste este valor conforme necessário
-        let prices: { [key: string]: { avg: string; min: string; max: string } } = {};
+        const maxUrlLength = 2000;
+        let prices: { [key: string]: { avg: string; min: string; max: string } | null } = {};
 
         const fetchPricesForSubset = async (subset: string[]) => {
             const url = `${baseUrl}${subset.join(',')}${timeScale}`;
@@ -72,20 +72,17 @@ export default function Home() {
         const fetchAllSubsets = async () => {
             let allPrices: any[] = [];
             for (const variation of itemVariations) {
-                const newUrlLength = currentUrlLength + variation.length + 1; // +1 for the comma separator
+                const newUrlLength = currentUrlLength + variation.length + 1;
                 if (newUrlLength > maxUrlLength) {
-                    // Fetch current subset if adding another variation would exceed the limit
                     const subsetPrices = await fetchPricesForSubset(currentSubset);
                     allPrices = [...allPrices, ...subsetPrices];
-                    // Reset for the next subset
                     currentSubset = [];
                     currentUrlLength = baseUrl.length + timeScale.length;
                 }
                 currentSubset.push(variation);
-                currentUrlLength += variation.length + 1; // +1 for the comma separator
+                currentUrlLength += variation.length + 1;
             }
 
-            // Don't forget to fetch the last subset
             if (currentSubset.length > 0) {
                 const subsetPrices = await fetchPricesForSubset(currentSubset);
                 allPrices = [...allPrices, ...subsetPrices];
@@ -106,14 +103,8 @@ export default function Home() {
 
         const allPrices = await fetchAllSubsets();
 
-        // Process allPrices to match the desired format
         allPrices.forEach((price: any) => {
             const itemId = price.item_id;
-
-            if (itemId === "T5_2H_HAMMER_AVALON@3") {
-                console.log(itemId, prices, "bayuyyyyyyyy", prices[itemId])
-            }
-
 
             if (!prices[itemId]) {
                 prices[itemId] = { avg: "0", min: "0", max: "0" };
@@ -127,6 +118,8 @@ export default function Home() {
                 prices[itemId].avg = formatPrice(avgPrice);
                 prices[itemId].min = formatPrice(minPrice);
                 prices[itemId].max = formatPrice(maxPrice);
+            } else {
+                prices[itemId] = null;
             }
         });
 
@@ -194,13 +187,24 @@ export default function Home() {
         }));
     };
 
+    const handleManualPriceChange = (itemName: string, value: string) => {
+        setManualPrices((prevPrices) => ({
+            ...prevPrices,
+            [itemName]: value,
+        }));
+    };
+
     const calculateTotalSetPrice = (event: Event): string => {
         const equipment = event.Victim.Equipment;
         const items = Object.values(equipment).filter(item => item !== null).map(item => item.Type);
 
         const totalPrice = items.reduce((sum, item) => {
             const baseName = `T8_${item.replace(/^T\d+_/, '').replace(/@\d+$/, '')}`;
-            const price = itemPrices[baseName] ? parseFloat(itemPrices[baseName].avg.replace(/[km]/, '')) * (itemPrices[baseName].avg.includes('m') ? 1_000_000 : itemPrices[baseName].avg.includes('k') ? 1_000 : 1) : 0;
+            const price = manualPrices[baseName]
+                ? parseFloat(manualPrices[baseName].replace(/[km]/, '')) * (manualPrices[baseName].includes('m') ? 1_000_000 : manualPrices[baseName].includes('k') ? 1_000 : 1)
+                : itemPrices[baseName]
+                    ? parseFloat(itemPrices[baseName]!.avg.replace(/[km]/, '')) * (itemPrices[baseName]!.avg.includes('m') ? 1_000_000 : itemPrices[baseName]!.avg.includes('k') ? 1_000 : 1)
+                    : 0;
             return sum + price;
         }, 0);
 
@@ -211,7 +215,11 @@ export default function Home() {
 
     const calculateTotalTableCost = (): string => {
         const totalCost = Object.entries(equipmentCounts).reduce((sum, [itemName, itemData]) => {
-            const price = itemPrices[itemName] ? parseFloat(itemPrices[itemName].avg.replace(/[km]/, '')) * (itemPrices[itemName].avg.includes('m') ? 1_000_000 : itemPrices[itemName].avg.includes('k') ? 1_000 : 1) : 0;
+            const price = manualPrices[itemName]
+                ? parseFloat(manualPrices[itemName].replace(/[km]/, '')) * (manualPrices[itemName].includes('m') ? 1_000_000 : manualPrices[itemName].includes('k') ? 1_000 : 1)
+                : itemPrices[itemName]
+                    ? parseFloat(itemPrices[itemName]!.avg.replace(/[km]/, '')) * (itemPrices[itemName]!.avg.includes('m') ? 1_000_000 : itemPrices[itemName]!.avg.includes('k') ? 1_000 : 1)
+                    : 0;
             return sum + (price * itemData.count);
         }, 0);
 
@@ -304,6 +312,7 @@ export default function Home() {
                                         return checkOrXa.check === "❌" ? -1 : checkOrXb.check === "❌" ? 1 : 0;
                                     })
                                     .map((event, index) => {
+                                        console.log(event.Victim.Equipment)
                                         const checkOrX = getCheckOrX(event);
                                         return (
                                             <tr key={index} className="bg-gray-800">
@@ -314,7 +323,29 @@ export default function Home() {
                                                         onChange={(e) => handleExceptionChange(event.EventId, e.target.checked)}
                                                     />
                                                 </td>
-                                                <td className="border px-4 py-2">{event.Victim.Name}</td>
+                                                <td className="border px-4 py-2 ">
+                                                    <span>{event.Victim.Name}</span>
+                                                    <span
+                                                        className="ml-2 cursor-pointer"
+                                                        onMouseEnter={() => setHoveredPlayer(event.EventId)}
+                                                        onMouseLeave={() => setHoveredPlayer(null)}
+                                                    >
+                                                        👤
+                                                    </span>
+                                                    {hoveredPlayer === event.EventId && (
+                                                        <div className="absolute bg-gray-400 p-2 rounded-md shadow-lg z-10">
+                                                            {event.Victim.Equipment.Head?.Type && <img src={getItemImageUrl(event.Victim.Equipment.Head?.Type)} alt="Head" width="50" height="50" />}
+                                                            {event.Victim.Equipment.Armor?.Type && <img src={getItemImageUrl(event.Victim.Equipment.Armor?.Type)} alt="Armor" width="50" height="50" />}
+                                                            {event.Victim.Equipment.MainHand?.Type && <img src={getItemImageUrl(event.Victim.Equipment.MainHand?.Type)} alt="MainHand" width="50" height="50" />}
+                                                            {event.Victim.Equipment.OffHand?.Type && <img src={getItemImageUrl(event.Victim.Equipment.OffHand?.Type)} alt="OffHand" width="50" height="50" />}
+                                                            {event.Victim.Equipment.Shoes?.Type && <img src={getItemImageUrl(event.Victim.Equipment.Shoes?.Type)} alt="Shoes" width="50" height="50" />}
+                                                            {event.Victim.Equipment.Cape?.Type && <img src={getItemImageUrl(event.Victim.Equipment.Cape?.Type)} alt="Cape" width="50" height="50" />}
+                                                            {event.Victim.Equipment.Mount?.Type && <img src={getItemImageUrl(event.Victim.Equipment.Mount?.Type)} alt="Mount" width="50" height="50" />}
+                                                            {event.Victim.Equipment.Potion?.Type && <img src={getItemImageUrl(event.Victim.Equipment.Potion?.Type)} alt="Potion" width="50" height="50" />}
+                                                            {event.Victim.Equipment.Food?.Type && <img src={getItemImageUrl(event.Victim.Equipment.Food?.Type)} alt="Food" width="50" height="50" />}
+                                                        </div>
+                                                    )}
+                                                </td>
                                                 <td className="border px-4 py-2">{event.Victim.GuildName}</td>
                                                 <td className="border px-4 py-2">{event.Victim.AverageItemPower}</td>
                                                 <td className="border px-4 py-2">{new Date(event.TimeStamp).toLocaleString()}</td>
@@ -348,11 +379,19 @@ export default function Home() {
                                         <td className="border px-4 py-2">
                                             {itemPrices[item.name] ? (
                                                 <>
-                                                    <div>Avg: {itemPrices[item.name].avg}</div>
-                                                    <div className="opacity-35">Min: {itemPrices[item.name].min}</div>
-                                                    <div className="opacity-35">Max: {itemPrices[item.name].max}</div>
+                                                    <div>Avg: {itemPrices[item.name]!.avg}</div>
+                                                    <div className="opacity-35">Min: {itemPrices[item.name]!.min}</div>
+                                                    <div className="opacity-35">Max: {itemPrices[item.name]!.max}</div>
                                                 </>
-                                            ) : 'N/A'}
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={manualPrices[item.name] || ""}
+                                                    onChange={(e) => handleManualPriceChange(item.name, e.target.value)}
+                                                    className="form-input p-1 border rounded-md bg-gray-700"
+                                                    placeholder="N/A"
+                                                />
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
