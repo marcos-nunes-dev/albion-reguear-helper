@@ -42,6 +42,7 @@ export default function Home() {
         ];
         return variations;
     };
+    
 
     const fetchItemPrices = async (items: string[]): Promise<{ [key: string]: { avg: string; min: string; max: string } }> => {
         const itemVariations = items.flatMap(generateItemVariations);
@@ -68,33 +69,31 @@ export default function Home() {
         let currentSubset: string[] = [];
         let currentUrlLength = baseUrl.length + timeScale.length;
 
-        for (const variation of itemVariations) {
-            const potentialUrlLength = currentUrlLength + variation.length + 1; // +1 for comma
-
-            if (potentialUrlLength > maxUrlLength) {
-                // Fetch prices for the current subset
-                const data = await fetchPricesForSubset(currentSubset);
-                prices = { ...prices, ...processPricesData(data, items) };
-
-                // Reset for the next subset
-                currentSubset = [variation];
-                currentUrlLength = baseUrl.length + timeScale.length + variation.length + 1;
-            } else {
+        const fetchAllSubsets = async () => {
+            let allPrices: any[] = [];
+            for (const variation of itemVariations) {
+                const newUrlLength = currentUrlLength + variation.length + 1; // +1 for the comma separator
+                if (newUrlLength > maxUrlLength) {
+                    // Fetch current subset if adding another variation would exceed the limit
+                    const subsetPrices = await fetchPricesForSubset(currentSubset);
+                    allPrices = [...allPrices, ...subsetPrices];
+                    // Reset for the next subset
+                    currentSubset = [];
+                    currentUrlLength = baseUrl.length + timeScale.length;
+                }
                 currentSubset.push(variation);
-                currentUrlLength = potentialUrlLength;
+                currentUrlLength += variation.length + 1; // +1 for the comma separator
             }
-        }
 
-        // Fetch prices for the last subset
-        if (currentSubset.length > 0) {
-            const data = await fetchPricesForSubset(currentSubset);
-            prices = { ...prices, ...processPricesData(data, items) };
-        }
+            // Don't forget to fetch the last subset
+            if (currentSubset.length > 0) {
+                const subsetPrices = await fetchPricesForSubset(currentSubset);
+                allPrices = [...allPrices, ...subsetPrices];
+            }
 
-        return prices;
-    };
+            return allPrices;
+        };
 
-    const processPricesData = (data: any, items: string[]): { [key: string]: { avg: string; min: string; max: string } } => {
         const formatPrice = (price: number): string => {
             if (price >= 1_000_000) {
                 return (price / 1_000_000).toFixed(1) + 'm';
@@ -105,32 +104,32 @@ export default function Home() {
             }
         };
 
-        const prices: { [key: string]: { avg: string; min: string; max: string } } = {};
-        items.forEach(item => {
-            const baseName = item.replace(/^T\d+_/, '').replace(/@\d+$/, '');
-            const itemData = data.filter((d: any) => d.item_id.includes(baseName));
-            const validPrices = itemData.flatMap((cur: any) => cur.data.map((entry: any) => entry.avg_price).filter((price: number) => price > 0));
+        const allPrices = await fetchAllSubsets();
 
-            if (validPrices.length > 0) {
-                const total = validPrices.reduce((sum: number, price: number) => sum + price, 0);
-                const avgPrice = total / validPrices.length;
+        // Process allPrices to match the desired format
+        allPrices.forEach((price: any) => {
+            const itemId = price.item_id;
 
-                // Filtrar preços discrepantes
-                const filteredPrices = validPrices.filter((price: any) => price >= avgPrice * 0.65 && price <= avgPrice * 1.35);
+            if (itemId === "T5_2H_HAMMER_AVALON@3") {
+                console.log(itemId, prices, "bayuyyyyyyyy", prices[itemId])
+            }
 
-                if (filteredPrices.length > 0) {
-                    const totalFiltered = filteredPrices.reduce((sum: number, price: number) => sum + price, 0);
-                    const avgFilteredPrice = totalFiltered / filteredPrices.length;
-                    const minPrice = Math.min(...filteredPrices);
-                    const maxPrice = Math.max(...filteredPrices);
-                    prices[item] = { avg: formatPrice(avgFilteredPrice), min: formatPrice(minPrice), max: formatPrice(maxPrice) };
-                } else {
-                    prices[item] = { avg: '0', min: '0', max: '0' };
-                }
-            } else {
-                prices[item] = { avg: '0', min: '0', max: '0' };
+
+            if (!prices[itemId]) {
+                prices[itemId] = { avg: "0", min: "0", max: "0" };
+            }
+
+            if (price.data && price.data.length > 0) {
+                const avgPrice = price.data.reduce((acc: number, dataPoint: any) => acc + dataPoint.avg_price, 0) / price.data.length;
+                const minPrice = Math.min(...price.data.map((dataPoint: any) => dataPoint.avg_price));
+                const maxPrice = Math.max(...price.data.map((dataPoint: any) => dataPoint.avg_price));
+
+                prices[itemId].avg = formatPrice(avgPrice);
+                prices[itemId].min = formatPrice(minPrice);
+                prices[itemId].max = formatPrice(maxPrice);
             }
         });
+
         return prices;
     };
 
@@ -201,7 +200,6 @@ export default function Home() {
 
         const totalPrice = items.reduce((sum, item) => {
             const baseName = `T8_${item.replace(/^T\d+_/, '').replace(/@\d+$/, '')}`;
-            console.log(item, baseName, itemPrices)
             const price = itemPrices[baseName] ? parseFloat(itemPrices[baseName].avg.replace(/[km]/, '')) * (itemPrices[baseName].avg.includes('m') ? 1_000_000 : itemPrices[baseName].avg.includes('k') ? 1_000 : 1) : 0;
             return sum + price;
         }, 0);
@@ -336,7 +334,7 @@ export default function Home() {
                                     <th className="px-4 py-2 border-b border-gray-800">Foto do Item</th>
                                     <th className="px-4 py-2 border-b border-gray-800">Nome do Item</th>
                                     <th className="px-4 py-2 border-b border-gray-800">Quantidade</th>
-                                    <th className="px-4 py-2 border-b border-gray-800">Preço Médio</th>
+                                    <th className="px-4 py-2 border-b border-gray-800">Preço Médio/u</th>
                                 </tr>
                             </thead>
                             <tbody>
