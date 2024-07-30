@@ -134,8 +134,8 @@ export default function Att() {
                         <thead>
                             {headerGroups.map(headerGroup => (
                                 <tr {...headerGroup.getHeaderGroupProps()}>
-                                    {headerGroup.headers.map((column:any) => (
-                                        <th {...column.getHeaderProps(column.getSortByToggleProps())} className="px-4 py-2 border-b border-gray-800">
+                                    {headerGroup.headers.map((column:any, key) => (
+                                        <th key={key} {...column.getHeaderProps(column.getSortByToggleProps())} className="px-4 py-2 border-b border-gray-800">
                                             {column.render('Header')}
                                             <span>
                                                 {column.isSorted
