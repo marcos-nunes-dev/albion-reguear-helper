@@ -27,7 +27,7 @@ export default function Att() {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch('https://api.albionbattles.com/player?guildSearch=C%20A%20L%20A%20N%20G%20O%20S&interval=28&minGP=20');
+            const response = await fetch('https://api.albionbattles.com/player?guildSearch=C%20A%20L%20A%20N%20G%20O%20S&interval=28&minGP=10');
             if (!response.ok) {
                 throw new Error('Failed to fetch data');
             }
