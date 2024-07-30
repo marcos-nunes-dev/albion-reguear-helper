@@ -9,7 +9,7 @@ export default function Att() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const handleTextAreaChange = (event:any) => {
+    const handleTextAreaChange = (event: any) => {
         setPlayerList(event.target.value);
     };
 
@@ -32,7 +32,7 @@ export default function Att() {
                 throw new Error('Failed to fetch data');
             }
             const data = await response.json();
-            const playerParticipation = data.reduce((acc:any, player:any) => {
+            const playerParticipation = data.reduce((acc: any, player: any) => {
                 acc[player.name] = {
                     battleNumber: player.battleNumber,
                     totalFame: player.totalFame,
@@ -43,7 +43,7 @@ export default function Att() {
                 return acc;
             }, {});
 
-            const combinedData:any = players.map(player => ({
+            const combinedData: any = players.map(player => ({
                 ...player,
                 ...playerParticipation[player.name] || {
                     battleNumber: 0,
@@ -55,8 +55,8 @@ export default function Att() {
             })).sort((a, b) => b.battleNumber - a.battleNumber);
 
             setPlayersData(combinedData);
-        } catch (error:any) {
-            setError('Error fetching player participation: ' + error.message );
+        } catch (error: any) {
+            setError('Error fetching player participation: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -132,9 +132,9 @@ export default function Att() {
                     <h2 className="text-2xl mb-4">Dados dos Jogadores:</h2>
                     <table {...getTableProps()} className="table-auto w-full text-left mb-8">
                         <thead>
-                            {headerGroups.map(headerGroup => (
-                                <tr {...headerGroup.getHeaderGroupProps()}>
-                                    {headerGroup.headers.map((column:any, key) => (
+                            {headerGroups.map((headerGroup, index) => (
+                                <tr {...headerGroup.getHeaderGroupProps()} key={index}>
+                                    {headerGroup.headers.map((column: any, key) => (
                                         <th key={key} {...column.getHeaderProps(column.getSortByToggleProps())} className="px-4 py-2 border-b border-gray-800">
                                             {column.render('Header')}
                                             <span>
@@ -150,12 +150,12 @@ export default function Att() {
                             ))}
                         </thead>
                         <tbody {...getTableBodyProps()}>
-                            {rows.map(row => {
+                            {rows.map((row, rowIndex) => {
                                 prepareRow(row);
                                 return (
-                                    <tr {...row.getRowProps()} className="bg-gray-800">
-                                        {row.cells.map(cell => (
-                                            <td {...cell.getCellProps()} className="border px-4 py-2">
+                                    <tr {...row.getRowProps()} key={rowIndex} className="bg-gray-800">
+                                        {row.cells.map((cell, cellIndex) => (
+                                            <td {...cell.getCellProps()} key={cellIndex} className="border px-4 py-2">
                                                 {cell.render('Cell')}
                                             </td>
                                         ))}
