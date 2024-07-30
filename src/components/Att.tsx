@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import "../app/globals.css";
 import { useTable, useSortBy } from 'react-table';
 
@@ -61,6 +61,37 @@ export default function Att() {
             setLoading(false);
         }
     };
+
+    const calculateAverages = () => {
+        const totalPlayers = playersData.length;
+        const totals = playersData.reduce((acc: any, player: any) => {
+            acc.battleNumber += player.battleNumber;
+            acc.totalFame += player.totalFame;
+            acc.totalKills += player.totalKills;
+            acc.totalDeath += player.totalDeath;
+            acc.averageIP += player.averageIP;
+            return acc;
+        }, { battleNumber: 0, totalFame: 0, totalKills: 0, totalDeath: 0, averageIP: 0 });
+
+        const playersWithThreeOrMoreBattles = playersData.filter((player: any) => player.battleNumber >= 3);
+        const validIPPlayers = playersWithThreeOrMoreBattles.filter((player: any) => player.averageIP > 0);
+
+        const averageBattleNumber = (totals.battleNumber / totalPlayers).toFixed(2);
+        const averageBattleNumberThreeOrMore = (playersWithThreeOrMoreBattles.reduce((acc, player: any) => acc + player.battleNumber, 0) / playersWithThreeOrMoreBattles.length).toFixed(2);
+        const averageKillsThreeOrMore = (playersWithThreeOrMoreBattles.reduce((acc, player: any) => acc + player.totalKills, 0) / playersWithThreeOrMoreBattles.length).toFixed(2);
+        const averageDeathsThreeOrMore = (playersWithThreeOrMoreBattles.reduce((acc, player: any) => acc + player.totalDeath, 0) / playersWithThreeOrMoreBattles.length).toFixed(2);
+        const averageIPThreeOrMore = (validIPPlayers.reduce((acc, player: any) => acc + player.averageIP, 0) / validIPPlayers.length).toFixed(2);
+
+        return {
+            averageBattleNumber,
+            averageBattleNumberThreeOrMore,
+            averageKillsThreeOrMore,
+            averageDeathsThreeOrMore,
+            averageIPThreeOrMore
+        };
+    };
+
+    const averages = calculateAverages();
 
     const columns = React.useMemo(() => [
         {
@@ -129,6 +160,15 @@ export default function Att() {
 
             {playersData.length > 0 && (
                 <div className="mt-8 w-full max-w-5xl">
+                    <h2 className="text-2xl mb-4">Estatísticas Gerais dos Jogadores:</h2>
+                    <div className="mb-8">
+                        <p>Média geral de battle number: {averages.averageBattleNumber}</p>
+                        <p>Média de battle number de quem participou 3 ou mais vezes: {averages.averageBattleNumberThreeOrMore}</p>
+                        <p>Média de Kills de quem participou 3 ou mais vezes: {averages.averageKillsThreeOrMore}</p>
+                        <p>Média de Deaths de quem participou 3 ou mais vezes: {averages.averageDeathsThreeOrMore}</p>
+                        <p>Média de IP de quem participou 3 ou mais vezes: {averages.averageIPThreeOrMore}</p>
+                    </div>
+
                     <h2 className="text-2xl mb-4">Dados dos Jogadores:</h2>
                     <table {...getTableProps()} className="table-auto w-full text-left mb-8">
                         <thead>
