@@ -396,21 +396,21 @@ export default function Skip() {
                 </div>
                 <table {...getTableProps()} className="table-auto mt-4">
                     <thead>
-                        {headerGroups.map(headerGroup => (
-                            <tr {...headerGroup.getHeaderGroupProps()}>
-                                {headerGroup.headers.map(column => (
-                                    <th {...column.getHeaderProps()} className="px-4 py-2">{column.render('Header')}</th>
+                        {headerGroups.map((headerGroup, index) => (
+                            <tr {...headerGroup.getHeaderGroupProps()} key={index}>
+                                {headerGroup.headers.map((column, key) => (
+                                    <th {...column.getHeaderProps()} className="px-4 py-2" key={key}>{column.render('Header')}</th>
                                 ))}
                             </tr>
                         ))}
                     </thead>
                     <tbody {...getTableBodyProps()}>
-                        {rows.map(row => {
+                        {rows.map((row, key) => {
                             prepareRow(row);
                             return (
-                                <tr {...row.getRowProps()}>
-                                    {row.cells.map(cell => (
-                                        <td {...cell.getCellProps()} className="border px-4 py-2">{cell.render('Cell')}</td>
+                                <tr {...row.getRowProps()} key={key}>
+                                    {row.cells.map((cell, key) => (
+                                        <td {...cell.getCellProps()} className="border px-4 py-2" key={key}>{cell.render('Cell')}</td>
                                     ))}
                                 </tr>
                             );
@@ -423,21 +423,21 @@ export default function Skip() {
                 <h2>Online Players</h2>
                 <table {...getOnlineTableProps()} className="table-auto mt-4">
                     <thead>
-                        {onlineHeaderGroups.map(headerGroup => (
-                            <tr {...headerGroup.getHeaderGroupProps()}>
-                                {headerGroup.headers.map(column => (
-                                    <th {...column.getHeaderProps()} className="px-4 py-2">{column.render('Header')}</th>
+                        {onlineHeaderGroups.map((headerGroup, key) => (
+                            <tr {...headerGroup.getHeaderGroupProps()} key={key}>
+                                {headerGroup.headers.map((column, key) => (
+                                    <th {...column.getHeaderProps()} className="px-4 py-2" key={key}>{column.render('Header')}</th>
                                 ))}
                             </tr>
                         ))}
                     </thead>
                     <tbody {...getOnlineTableBodyProps()}>
-                        {onlineRows.map(row => {
+                        {onlineRows.map((row, key) => {
                             prepareOnlineRow(row);
                             return (
-                                <tr {...row.getRowProps()}>
-                                    {row.cells.map(cell => (
-                                        <td {...cell.getCellProps()} className="border px-4 py-2">{cell.render('Cell')}</td>
+                                <tr {...row.getRowProps()} key={key}>
+                                    {row.cells.map((cell, key) => (
+                                        <td {...cell.getCellProps()} className="border px-4 py-2" key={key}>{cell.render('Cell')}</td>
                                     ))}
                                 </tr>
                             );
