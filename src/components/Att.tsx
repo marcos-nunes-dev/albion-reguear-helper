@@ -14,13 +14,21 @@ export default function Att() {
     };
 
     const parsePlayerList = () => {
-        const lines = playerList.trim().split('\n');
-        const players = lines.slice(1).map(line => {
-            const [name, lastSeen, roles] = line.split('","').map(field => field.replace(/(^"|"$)/g, ''));
-            return { name, lastSeen, roles };
+        // Divide a lista em linhas, ignorando a primeira linha (cabeçalho)
+        const lines = playerList.trim().split('\n').slice(1);
+
+        // Mapeia cada linha para um objeto de jogador
+        const players = lines.map(line => {
+            // Divide cada linha em campos usando a tabulação como delimitador
+            const [name, lastSeen, roles] = line.split('\t');
+
+            // Remove possíveis aspas e cria o objeto do jogador
+            return { name: name.replace(/^"|"$/g, ''), lastSeen: lastSeen.replace(/^"|"$/g, ''), roles: roles.replace(/^"|"$/g, '') };
         });
+
         return players;
     };
+
 
     const fetchPlayerParticipation = async () => {
         const players = parsePlayerList();
@@ -43,6 +51,7 @@ export default function Att() {
                 return acc;
             }, {});
 
+            console.log(players)
             const combinedData: any = players.map(player => ({
                 ...player,
                 ...playerParticipation[player.name] || {
@@ -53,6 +62,8 @@ export default function Att() {
                     averageIP: 0,
                 }
             })).sort((a, b) => b.battleNumber - a.battleNumber);
+
+            console.log(combinedData)
 
             setPlayersData(combinedData);
         } catch (error: any) {
